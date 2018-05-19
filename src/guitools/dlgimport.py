@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'dlgimport.ui'
 #
-# Created: Sat May 19 17:13:12 2018
+# Created: Sat May 19 23:24:12 2018
 #      by: pyside-uic 0.2.15 running on PySide 1.2.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -132,15 +132,15 @@ class Ui_DlgImporter(object):
         self.verticalLayout_2.addItem(spacerItem2)
         self.horizontalLayout_8 = QtGui.QHBoxLayout()
         self.horizontalLayout_8.setObjectName("horizontalLayout_8")
-        self.pushButton = QtGui.QPushButton(self.page_3)
-        self.pushButton.setObjectName("pushButton")
-        self.horizontalLayout_8.addWidget(self.pushButton)
+        self.btnHelp = QtGui.QPushButton(self.page_3)
+        self.btnHelp.setObjectName("btnHelp")
+        self.horizontalLayout_8.addWidget(self.btnHelp)
         spacerItem3 = QtGui.QSpacerItem(40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
         self.horizontalLayout_8.addItem(spacerItem3)
         self.btnDiscard = QtGui.QPushButton(self.page_3)
         self.btnDiscard.setObjectName("btnDiscard")
         self.horizontalLayout_8.addWidget(self.btnDiscard)
-        spacerItem4 = QtGui.QSpacerItem(40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
+        spacerItem4 = QtGui.QSpacerItem(13, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
         self.horizontalLayout_8.addItem(spacerItem4)
         self.btnReset = QtGui.QPushButton(self.page_3)
         self.btnReset.setObjectName("btnReset")
@@ -172,9 +172,9 @@ class Ui_DlgImporter(object):
         self.horizontalLayout_9.setObjectName("horizontalLayout_9")
         spacerItem5 = QtGui.QSpacerItem(40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
         self.horizontalLayout_9.addItem(spacerItem5)
-        self.btnClose = QtGui.QPushButton(self.page_4)
-        self.btnClose.setObjectName("btnClose")
-        self.horizontalLayout_9.addWidget(self.btnClose)
+        self.btnBack = QtGui.QPushButton(self.page_4)
+        self.btnBack.setObjectName("btnBack")
+        self.horizontalLayout_9.addWidget(self.btnBack)
         self.verticalLayout_4.addLayout(self.horizontalLayout_9)
         self.stackMain.addWidget(self.page_4)
         self.page_5 = QtGui.QWidget()
@@ -215,8 +215,8 @@ class Ui_DlgImporter(object):
         self.stackMain.setCurrentIndex(0)
         self.stackFileSel.setCurrentIndex(1)
         QtCore.QObject.connect(self.btnCloseHelp, QtCore.SIGNAL("clicked()"), DlgImporter.closeHelp)
-        QtCore.QObject.connect(self.btnClose, QtCore.SIGNAL("clicked()"), DlgImporter.accept)
-        QtCore.QObject.connect(self.btnDiscard, QtCore.SIGNAL("clicked()"), DlgImporter.reject)
+        QtCore.QObject.connect(self.btnBack, QtCore.SIGNAL("clicked()"), DlgImporter.goBack)
+        QtCore.QObject.connect(self.btnDiscard, QtCore.SIGNAL("clicked()"), DlgImporter.accept)
         QtCore.QObject.connect(self.btnReset, QtCore.SIGNAL("clicked()"), DlgImporter.reset)
         QtCore.QObject.connect(self.btnImport, QtCore.SIGNAL("clicked()"), DlgImporter.go)
         QtCore.QObject.connect(self.tbtnFileSel, QtCore.SIGNAL("clicked()"), DlgImporter.selectFile)
@@ -226,7 +226,7 @@ class Ui_DlgImporter(object):
         QtCore.QObject.connect(self.tbtnFolderSel, QtCore.SIGNAL("clicked()"), DlgImporter.selectFolder)
         QtCore.QObject.connect(self.rbtnFile, QtCore.SIGNAL("clicked(bool)"), DlgImporter.showFilePage)
         QtCore.QObject.connect(self.rbtnFolder, QtCore.SIGNAL("clicked(bool)"), DlgImporter.showFolderPage)
-        QtCore.QObject.connect(self.pushButton, QtCore.SIGNAL("clicked()"), DlgImporter.showHelp)
+        QtCore.QObject.connect(self.btnHelp, QtCore.SIGNAL("clicked()"), DlgImporter.showHelp)
         QtCore.QMetaObject.connectSlotsByName(DlgImporter)
 
     def retranslateUi(self, DlgImporter):
@@ -247,10 +247,10 @@ class Ui_DlgImporter(object):
         self.tbtnImportFolderSel.setText(QtGui.QApplication.translate("DlgImporter", "...", None, QtGui.QApplication.UnicodeUTF8))
         self.grpboxDataType.setTitle(QtGui.QApplication.translate("DlgImporter", "Assume the same data type for all the files:", None, QtGui.QApplication.UnicodeUTF8))
         self.label_2.setText(QtGui.QApplication.translate("DlgImporter", "Data type:", None, QtGui.QApplication.UnicodeUTF8))
-        self.pushButton.setText(QtGui.QApplication.translate("DlgImporter", "&Help", None, QtGui.QApplication.UnicodeUTF8))
-        self.btnDiscard.setText(QtGui.QApplication.translate("DlgImporter", "&Discard", None, QtGui.QApplication.UnicodeUTF8))
+        self.btnHelp.setText(QtGui.QApplication.translate("DlgImporter", "&Help", None, QtGui.QApplication.UnicodeUTF8))
+        self.btnDiscard.setText(QtGui.QApplication.translate("DlgImporter", "&Close", None, QtGui.QApplication.UnicodeUTF8))
         self.btnReset.setText(QtGui.QApplication.translate("DlgImporter", "&Reset", None, QtGui.QApplication.UnicodeUTF8))
         self.btnImport.setText(QtGui.QApplication.translate("DlgImporter", "&Import", None, QtGui.QApplication.UnicodeUTF8))
-        self.btnClose.setText(QtGui.QApplication.translate("DlgImporter", "&Close", None, QtGui.QApplication.UnicodeUTF8))
-        self.btnCloseHelp.setText(QtGui.QApplication.translate("DlgImporter", "&OK", None, QtGui.QApplication.UnicodeUTF8))
+        self.btnBack.setText(QtGui.QApplication.translate("DlgImporter", "&Back", None, QtGui.QApplication.UnicodeUTF8))
+        self.btnCloseHelp.setText(QtGui.QApplication.translate("DlgImporter", "&Back", None, QtGui.QApplication.UnicodeUTF8))
 

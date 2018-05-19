@@ -79,7 +79,7 @@ class Importer(object):
         self.num_of_failed_files = 0
         self.ares_data_types = {}
         self.hasCompiledPatterns = False
-        
+            
         this_script_dir = os.path.dirname(os.path.realpath(__file__))
         cfg_file = this_script_dir + '/../' + Importer.AresFileTypesCfgFile
         logging.info('Reading import script config. file {0}'.format(cfg_file))
@@ -123,10 +123,13 @@ class Importer(object):
         elif input_file:
             self.input_files = glob.glob(self.input_file)
         else:
+            self.input_files = []
             self.error_msg('No input files provided.')
             
         logging.debug(self.input_files)
-        if len(self.input_files) < 1:
+        self.num_of_files = len(self.input_files)
+
+        if self.num_of_files < 1:
             self.error_msg('No data files found for ingestion')
             
         if import_dir:
@@ -135,14 +138,14 @@ class Importer(object):
                           .format(import_dir))
             self.import_dir = import_dir
 
-    def self.error_msg(self, msg):
+    def error_msg(self, msg):
         if self.batch_mode:
             logging.error(msg)
         else:
             logging.fatal(msg)
             os._exit(1)
             
-def set_predef_type_patterns(self, patdict):
+    def set_predef_type_patterns(self, patdict):
         '''
         Use as patterns the ones provided by the user
         '''
@@ -265,7 +268,6 @@ def set_predef_type_patterns(self, patdict):
         '''
 
         # Main loop on files
-        self.num_of_files = len(self.input_files)
         for i, fname in enumerate(self.input_files):
             logging.info('Preparing import of file {0} of {1}: {2}'
                          .format(i + 1, self.num_of_files, fname))
@@ -349,7 +351,9 @@ def set_predef_type_patterns(self, patdict):
         '''
         Execute import, for one single file or an entire directory, if specified
         '''
-
+        if self.num_of_files < 1:
+            return
+        
         if not self.hasCompiledPatterns:
             logging.error('No patterns file was found nor patterns were provided by the user')
             #os._exit(1)

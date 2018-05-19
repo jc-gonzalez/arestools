@@ -1,9 +1,9 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
-'''XImportFiles.py
+'''
+XImportFiles.py
 
 Import data files to ARES, using a PySide GUI
-
 '''
 
 from PySide.QtGui import * 
@@ -26,13 +26,6 @@ __email__ = "jcgonzalez@sciops.esa.int"
 __status__ = "Prototype" # Prototype | Development | Production
 
 
-# Change INFO for DEBUG to get debug messages
-log_level = logging.INFO
-
-# Set up logging information
-format_string = '%(asctime)s %(levelname).1s %(message)s'
-logging.basicConfig(level=log_level, format=format_string, stream=sys.stderr)
-
 TypeRegex = {
    "TC_REQUEST" : { "re" : "^TCRequest", "dir" : "command" },
    "TC_IMPORT" : { "re" : "^TCImport", "dir" : "command" },
@@ -52,41 +45,13 @@ TypeRegex = {
    "TM_PARAM_DEF_IMPORT" : { "re" : "^TMParamDef", "dir" : "paramdef" }
 }
 
-class OutputWrapper(QObject):
-    outputWritten = pyqtSignal(object, object)
+# Change INFO for DEBUG to get debug messages
+log_level = logging.INFO
 
-    def __init__(self, parent, stdout=True):
-        QObject.__init__(self, parent)
-        if stdout:
-            self._stream = sys.stdout
-            sys.stdout = self
-        else:
-            self._stream = sys.stderr
-            sys.stderr = self
-        self._stdout = stdout
+# Set up logging information
+format_string = '%(asctime)s %(levelname).1s %(message)s'
+logging.basicConfig(level=log_level, format=format_string, stream=sys.stderr)
 
-    def write(self, text):
-        self._stream.write(text)
-        self.outputWritten.emit(text, self._stdout)
-
-    def __getattr__(self, name):
-        return getattr(self._stream, name)
-
-    def __del__(self):
-        try:
-            if self._stdout:
-                sys.stdout = self._stream
-            else:
-                sys.stderr = self._stream
-        except AttributeError:
-            pass
-
-def greetings():
-    '''
-    Says hello
-    '''
-    logging.info('='*60)
-    logging.info('ImportFiles.py - Data Files Tools for ARES')
 
 class MainWindow(QDialog, Ui_DlgImporter): 
 
@@ -139,22 +104,13 @@ class MainWindow(QDialog, Ui_DlgImporter):
             self.AresRuntimeDir = os.environ["ARES_RUNTIME"]
         self.reset()
 
-        stdout = OutputWrapper(self, True)
-        stdout.outputWritten.connect(self.handleOutput)
-        stderr = OutputWrapper(self, False)
-        stderr.outputWritten.connect(self.handleOutput)
-
         self.show()
-
-    def handleOutput(self, text, stdout):
-        color = self.terminal.textColor()
-        self.pltxtLog.setTextColor(color if stdout else self._err_color)
-        self.pltxtLog.moveCursor(QTextCursor.End)
-        self.pltxtLog.insertPlainText(text)
-        self.pltxtLog.setTextColor(color)
 
     def showHelp(self):
         self.stackMain.setCurrentIndex(2)
+
+    def goBack(self):
+        self.stackMain.setCurrentIndex(0)
 
     def closeHelp(self):
         self.stackMain.setCurrentIndex(0)
@@ -181,7 +137,7 @@ class MainWindow(QDialog, Ui_DlgImporter):
 
         args['type'] = self.cboxDataType.currentText() if self.grpboxDataType.isChecked() else None
 
-        self.stackMain.setCurrentIndex(1)
+        # self.stackMain.setCurrentIndex(1)
 
         importer = Importer(data_dir=args['input'], input_file=args['ifile'],
                             def_file=args['defn'], import_dir=args['dir'],
