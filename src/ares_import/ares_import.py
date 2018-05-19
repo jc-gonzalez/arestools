@@ -75,6 +75,7 @@ class Importer(object):
         self.num_of_imported_files = 0
         self.num_of_failed_files = 0
         self.ares_data_types = {}
+        self.hasCompiledPatterns = False
         
         this_script_dir = os.path.dirname(os.path.realpath(__file__))
         cfg_file = this_script_dir + '/../' + Importer.AresFileTypesCfgFile
@@ -84,14 +85,15 @@ class Importer(object):
                 try:
                     self.ares_data_types = json.load(fcfg)
                     self.compile_patterns()
+                    self.hasCompiledPatterns = True
                 except:
        	            logging.fatal('Problem while reading config. file {0}'
                                   .format(cfg_file))
        	            os._exit(1)
         except:
-            logging.fatal('Import script config. file not found in {0}'
-                          .format(cfg_file))
-            os._exit(1)
+            logging.warning('Import script config. file not found in {0}'
+                            .format(cfg_file))
+            #os._exit(1)
 
         #pprint(self.ares_data_types)
         logging.info('-'*60)
@@ -137,6 +139,18 @@ class Importer(object):
                 os._exit(1)
             self.import_dir = import_dir
 
+    def set_predef_type_patterns(self, patdict):
+        '''
+        Use as patterns the ones provided by the user
+        '''
+        try:
+            self.ares_data_types = patdict
+            self.compile_patterns()
+            self.hasCompiledPatterns = True
+        except:
+       	    logging.fatal('Problem while compiling user provided patterns')
+       	    os._exit(1)
+            
     def compile_patterns(self):
         '''
         Compile patterns used to define file data type
@@ -336,7 +350,11 @@ class Importer(object):
         Execute import, for one single file or an entire directory, if specified
         '''
 
-        self.compile_patterns()
+        if not self.hasCompiledPatterns:
+            logging.fatal('No patterns file was found nor patterns were provided by the user')
+            os._exit(1)
+
+        #self.compile_patterns()
 
         if self.def_file:
             self.import_definitions()
