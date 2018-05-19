@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'dlgimport.ui'
 #
-# Created: Sat May 19 14:43:59 2018
+# Created: Sat May 19 17:13:12 2018
 #      by: pyside-uic 0.2.15 running on PySide 1.2.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -213,7 +213,7 @@ class Ui_DlgImporter(object):
 
         self.retranslateUi(DlgImporter)
         self.stackMain.setCurrentIndex(0)
-        self.stackFileSel.setCurrentIndex(0)
+        self.stackFileSel.setCurrentIndex(1)
         QtCore.QObject.connect(self.btnCloseHelp, QtCore.SIGNAL("clicked()"), DlgImporter.closeHelp)
         QtCore.QObject.connect(self.btnClose, QtCore.SIGNAL("clicked()"), DlgImporter.accept)
         QtCore.QObject.connect(self.btnDiscard, QtCore.SIGNAL("clicked()"), DlgImporter.reject)
