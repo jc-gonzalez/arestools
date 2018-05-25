@@ -58,7 +58,8 @@ class Importer(object):
     AresFileTypesCfgFile = "import_file_types.json"
 
     def __init__(self, data_dir=None, input_file=None, def_file=None,
-                 ares_runtime=None, import_dir=None, data_type=None):
+                 ares_runtime=None, import_dir=None, data_type=None,
+                 batch_mode=False):
         '''
         Instance initialization method
         '''
@@ -71,6 +72,8 @@ class Importer(object):
         self.def_file = def_file
         self.input_file = input_file
 
+        self.batch_mode = batch_mode
+
         self.num_of_files = 1
         self.num_of_imported_files = 0
         self.num_of_failed_files = 0
@@ -81,20 +84,18 @@ class Importer(object):
         cfg_file = this_script_dir + '/../' + Importer.AresFileTypesCfgFile
         logging.info('Reading import script config. file {0}'.format(cfg_file))
         try:
-	    with open(cfg_file) as fcfg:
+            with open(cfg_file) as fcfg:
                 try:
                     self.ares_data_types = json.load(fcfg)
                     self.compile_patterns()
                     self.hasCompiledPatterns = True
                 except:
-       	            logging.fatal('Problem while reading config. file {0}'
-                                  .format(cfg_file))
-       	            os._exit(1)
+                    self.error_msg('Problem while reading config. file {0}'
+                              .format(cfg_file))
         except:
-            logging.warning('Import script config. file not found in {0}'
-                            .format(cfg_file))
-            #os._exit(1)
-
+            self.error_msg('Import script config. file not found in {0}'
+                      .format(cfg_file))
+            
         #pprint(self.ares_data_types)
         logging.info('-'*60)
 
@@ -102,10 +103,9 @@ class Importer(object):
             self.ares_runtime = ares_runtime
 
         if not os.path.isdir(self.ares_runtime):
-            logging.fatal('ARES system runtime folder {0} does not exist'
-                          .format(self.ares_runtime))
-            os._exit(1)
-
+            self.error_msg('ARES system runtime folder {0} does not exist'
+                      .format(self.ares_runtime))
+            
         logging.info('ARES system runtime folder is {0}'.format(self.ares_runtime))
         self.ares_import = self.ares_runtime + '/import'
         logging.info('ARES import folder is {0}'.format(self.ares_import))
@@ -116,30 +116,33 @@ class Importer(object):
         # Evaluate input data files
         if data_dir:
             if not os.path.isdir(self.data_dir):
-                logging.fatal('Specified input data folder {0} does not exist'
-                              .format(self.data_dir))
-                os._exit(1)
-
+                self.error_msg('Specified input data folder {0} does not exist'
+                          .format(self.data_dir))
+                
             self.input_files = glob.glob(self.data_dir + '/*.dat')
         elif input_file:
             self.input_files = glob.glob(self.input_file)
         else:
-            logging.fatal('No input files provided.')
-            os._exit(1)
+            self.error_msg('No input files provided.')
             
         logging.debug(self.input_files)
         if len(self.input_files) < 1:
-            logging.fatal('No data files found for ingestion')
-            os._exit(1)
+            self.error_msg('No data files found for ingestion')
             
         if import_dir:
             if not os.path.isdir(import_dir):
-                logging.fatal('Location for importing input files {0} does not exist'
-                              .format(import_dir))
-                os._exit(1)
+                self.error_msg('Location for importing input files {0} does not exist'
+                          .format(import_dir))
             self.import_dir = import_dir
 
-    def set_predef_type_patterns(self, patdict):
+    def self.error_msg(self, msg):
+        if self.batch_mode:
+            logging.error(msg)
+        else:
+            logging.fatal(msg)
+            os._exit(1)
+            
+def set_predef_type_patterns(self, patdict):
         '''
         Use as patterns the ones provided by the user
         '''
@@ -148,8 +151,7 @@ class Importer(object):
             self.compile_patterns()
             self.hasCompiledPatterns = True
         except:
-       	    logging.fatal('Problem while compiling user provided patterns')
-       	    os._exit(1)
+            self.error_msg('Problem while compiling user provided patterns')
             
     def compile_patterns(self):
         '''
@@ -194,7 +196,7 @@ class Importer(object):
         was successful
         :return:
         '''
-	time.sleep(3)
+        time.sleep(3)
         result = False
         end_monitor = False
         with open(self.admin_server_log, 'r') as f:
@@ -226,9 +228,8 @@ class Importer(object):
         It is assumed that the 'paramdef' part in the import folder name is missing
         '''
         if not self.import_dir:
-            logging.fatal('Import folder for definition file is missing!')
-            os._exit(1)
-
+            self.error_msg('Import folder for definition file is missing!')
+        
         fimport_dir = 'paramdef/' + self.import_dir
         logging.info('Import folder for definition file is {0}'.format(fimport_dir))
 
@@ -243,9 +244,8 @@ class Importer(object):
         copy(fname, import_dir)
 
         if not self.wait_until_import_is_successful():
-            logging.fatal('Import of definition file failed. Exiting.')
-            os._exit(1)
-
+            self.error_msg('Import of definition file failed. Exiting.')
+            
         self.import_dir = 'parameter/' + self.import_dir
 
     def update_stats_on_result(self, result):
@@ -351,8 +351,8 @@ class Importer(object):
         '''
 
         if not self.hasCompiledPatterns:
-            logging.fatal('No patterns file was found nor patterns were provided by the user')
-            os._exit(1)
+            logging.error('No patterns file was found nor patterns were provided by the user')
+            #os._exit(1)
 
         #self.compile_patterns()
 
