@@ -38,7 +38,7 @@ call it directly.
 
 Usage example:
 
-  $ python src/ImportFiles.py --dir $(pwd)/in --runtime $(pwd)/runtime
+  $ python src/ImportFiles.py --input $(pwd)/in --runtime $(pwd)/runtime
 
 '''
 
