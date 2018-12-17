@@ -53,7 +53,7 @@ class EntrySpinbox(ttk.Frame):
 
         ttk.Frame.__init__(self, master)
         ttk.Label(self, text=label).pack(side=LEFT, padx=2, pady=2)
-        self.spbx = Spinbox(self, textvariable=self.data, from_=first, to=last, width=10)
+        self.spbx = Spinbox(self, textvariable=self.data, from_=first, to=last)
         self.spbx.pack(side=LEFT, expand=1, fill=X, padx=2, pady=2)
 
     def get(self):
@@ -61,6 +61,12 @@ class EntrySpinbox(ttk.Frame):
 
     def set(self, value):
         self.data.set(value)
+
+    def enable(self):
+        return self.spbx.config(state=NORMAL)
+
+    def disable(self):
+        return self.spbx.config(state=DISABLED)
 
 
 class YMDSpinboxes(ttk.Frame):
@@ -274,7 +280,9 @@ class CustomText(Text):
         Text.__init__(self, *args, **kwargs)
 
     def apply_tag(self, pattern=None, tag=None, regexp=True):
-        '''Apply the given tag to all text that matches the given pattern'''
+        '''
+        Apply the given tag to all text that matches the given pattern
+        '''
 
         #self.mark_set('matchStart', '1.0')
         start = '1.0'
@@ -284,12 +292,10 @@ class CustomText(Text):
             index = self.search(pattern, start, END, count=count, regexp=regexp)
             if index == '': break
             endSrch = '{}+{}c'.format(index, count.get())
-            print('match: {} - {}'.format(index, endSrch))
-            #self.mark_set('matchStart', index)
-            #self.mark_set('matchEnd', endSrch)
+            #print('match: {} - {}'.format(index, endSrch))
             self.tag_add(tag, index, endSrch)
             start = endSrch
-            print('added tag {}'.format(tag))
+            #print('added tag {}'.format(tag))
 
 if __name__ == '__main__':
     print('This is a library class and cannot be executed.')

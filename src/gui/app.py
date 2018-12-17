@@ -25,7 +25,7 @@ PY_NAME = "python3"
 STRING = str
 
 # import other useful classes
-import os, sys
+import os, sys, errno
 import time
 import datetime
 import logging
@@ -37,6 +37,7 @@ import json
 
 from .simpleeditor import launch_modal_editor
 from .gui_elements import EntrySpinbox, YMDSpinboxes,  YDoYSpinboxes,  HMSmsSpinboxes, DateTime, StatusBar, CustomText
+from aresdb.aresdb import AresDBConnection
 
 # details
 __author__ = "J C Gonzalez"
@@ -57,8 +58,11 @@ def getContentOfFile(file=None):
     '''
     Gets the content of a text file
     '''
-    with open(file, 'r') as f:
-        return f.read()
+    if os.path.exists(file) and os.path.isfile(file):
+        with open(file, 'r') as f:
+            return f.read()
+    else:
+        return ''
 
 def run(command):
     '''
@@ -71,6 +75,14 @@ def run(command):
             break
         yield line.decode('utf-8')
 
+def createDirIfNotExist(the_dir=None):
+    if the_dir:
+        if not os.path.exists(the_dir):
+            try:
+                os.makedirs(the_dir)
+            except OSError as e:
+                if e.errno != errno.EEXIST:
+                    raise
 
 class App:
     '''
@@ -82,6 +94,12 @@ class App:
         '''
         self.parent = parent
 
+        self.readConfig()
+
+        self.db = AresDBConnection(connection = self.cfgData['db'])
+
+        self.paramNames = self.db.getParamNames()
+        
         #=== Variables
 
         self.from_pid, self.to_pid, self.pids_step = (0, 0, 0)
@@ -143,24 +161,68 @@ class App:
 
         lfrm11 = ttk.LabelFrame(tab0, text='Retrieval parameters')
 
+        parnames = StringVar(value=self.paramNames)
+
+        self.paramRqstMode = StringVar()
+
+        rbtnPar0 = ttk.Radiobutton(lfrm11, text='Select parameter names', command=self.selectParamNames,
+                                   variable=self.paramRqstMode, value='name')
+        rbtnPar0.grid(row=0, column=0, padx=10, pady=6)
+
+        rbtnPar1 = ttk.Radiobutton(lfrm11, text='Select range of Param.IDs.', command=self.selectParamIds,
+                                   variable=self.paramRqstMode, value='id')
+        rbtnPar1.grid(row=0, column=1, padx=10, pady=6)
+
         frm111 = ttk.Frame(lfrm11)
         frm112 = ttk.Frame(lfrm11)
 
-        self.spbxFromPid = EntrySpinbox(frm111, label='From Param Id.:', first=1, last=50000)
+        self.lstParamNames = Listbox(frm111, listvariable=parnames, height=10, selectmode='extended')
+        self.lstParamNames.pack(side=LEFT, fill=BOTH, expand=Y)
+
+        scrollParName = ttk.Scrollbar(frm111, orient="vertical")
+        scrollParName.config(command=self.lstParamNames.yview)
+        scrollParName.pack(side=RIGHT, fill=Y)
+        
+        self.lstParamNames.config(yscrollcommand=scrollParName.set)
+
+        self.spbxFromPid = EntrySpinbox(frm112, label='From Param Id.:', first=1, last=50000)
         self.spbxFromPid.set(self.retrFromPid.get())
-        self.spbxFromPid.pack(side=LEFT, fill=X, expand=Y)
-        self.spbxToPid = EntrySpinbox(frm111, label='To Param Id.:', first=1, last=50000)
+        self.spbxFromPid.pack(fill=X, expand=N)
+
+        self.spbxToPid = EntrySpinbox(frm112, label='To Param Id.:', first=1, last=50000)
         self.spbxToPid.set(self.retrToPid.get())
-        self.spbxToPid.pack(side=RIGHT, fill=X, expand=Y)
+        self.spbxToPid.pack(fill=X, expand=N)
 
         self.spbxPidsBlock = EntrySpinbox(frm112, label='Param. Ids. block size (for FITS files)',
                                           first=1, last=50000)
         self.spbxPidsBlock.set(self.retrPidBlk.get())
-        self.spbxPidsBlock.pack(side=LEFT, fill=X, expand=Y)
-        ttk.Label(frm112, text='', width=20).pack(side=LEFT, fill=X, expand=Y)
+        self.spbxPidsBlock.pack(fill=X, expand=N)
+        ttk.Label(frm112, text=' ').pack(fill=BOTH, expand=Y)
 
-        frm111.pack(fill=X, expand=Y)
-        frm112.pack(fill=X, expand=Y)
+        frm111.grid(row=1, column=0, padx=20, pady=4, sticky=N)
+        frm112.grid(row=1, column=1, padx=20, pady=4, sticky=N)
+
+        self.paramRqstMode.set('name')
+        self.selectParamNames()
+
+        # frm111 = ttk.Frame(lfrm11)
+        # frm112 = ttk.Frame(lfrm11) 
+        # 
+        # self.spbxFromPid = EntrySpinbox(frm111, label='From Param Id.:', first=1, last=50000)
+        # self.spbxFromPid.set(self.retrFromPid.get())
+        # self.spbxFromPid.pack(side=LEFT, fill=X, expand=Y)
+        # self.spbxToPid = EntrySpinbox(frm111, label='To Param Id.:', first=1, last=50000)
+        # self.spbxToPid.set(self.retrToPid.get())
+        # self.spbxToPid.pack(side=RIGHT, fill=X, expand=Y)
+        # 
+        # self.spbxPidsBlock = EntrySpinbox(frm112, label='Param. Ids. block size (for FITS files)',
+        #                                   first=1, last=50000)
+        # self.spbxPidsBlock.set(self.retrPidBlk.get())
+        # self.spbxPidsBlock.pack(side=LEFT, fill=X, expand=Y)
+        # ttk.Label(frm112, text='', width=20).pack(side=LEFT, fill=X, expand=Y)
+        # 
+        # frm111.pack(fill=X, expand=Y)
+        # frm112.pack(fill=X, expand=Y)
 
         #----- Third section - Date range
 
@@ -203,7 +265,7 @@ class App:
 
         #self.notesBox = Text(tab1, wrap=WORD, width=40, height=10)
         #vscroll = ttk.Scrollbar(tab1, orient=VERTICAL, command=self.notesBox.yview)
-        #self.notesBox['yscroll'] = vscroll.set
+        #self.notesBox['yscroll'] = vscrol.setl
         #vscroll.pack(side=RIGHT, fill=Y)
 
         #self.notesBox.pack(fill=BOTH, expand=Y, padx=2, pady=2)
@@ -226,7 +288,7 @@ class App:
         frm212 = ttk.Frame(lfrm21)
         
         rbtnInp0 = ttk.Radiobutton(frm211, text='Input directory', command=self.useInputDir,
-                                   variable=self.inputMode, value='dir', width=10)
+                                   variable=self.inputMode, value='dir', width=14)
         rbtnInp0.pack(side=LEFT, padx=10, pady=2, expand=Y, fill=X)
         self.edInputDir = ttk.Entry(frm211, textvariable=self.inputDir)
         self.edInputDir.pack(side=LEFT, padx=2, pady=2, expand=Y, fill=X)
@@ -235,7 +297,7 @@ class App:
         frm211.pack(expand=Y, fill=X)
         
         rbtnInp1 = ttk.Radiobutton(frm212, text='Input files', command=self.useInputFiles,
-                                   variable=self.inputMode, value='files', width=10)
+                                   variable=self.inputMode, value='files', width=14)
         rbtnInp1.pack(side=LEFT, padx=10, pady=2, expand=Y, fill=X)
         self.edInputFiles = ttk.Entry(frm212, textvariable=self.inputFiles)
         self.edInputFiles.pack(side=LEFT, padx=2, pady=2, expand=Y, fill=X)
@@ -252,6 +314,10 @@ class App:
         self.aresRunTime = StringVar()
         if 'ARES_RUNTIME' in os.environ:
             self.aresRunTime = os.environ['ARES_RUNTIME']
+            self.cfgData['ares_runtime'] = self.aresRunTime
+            self.writeConfig()
+        else:
+            self.aresRunTime = self.cfgData['ares_runtime']
             
         self.edAresRunTime = ttk.Entry(lfrm22, textvariable=self.aresRunTime)
         self.edAresRunTime.pack(side=LEFT, expand=Y, fill=X, padx=2, pady=2)
@@ -404,25 +470,70 @@ class App:
 
     def help(self):
         win = Toplevel(self.parent)
-        win.title("About")
-        hlp = '''Top/bottom 3 - Reports only the top/bottom 3 rows for a param you will later specify.
-        Set noise threshold - Filters results with deltas below the specified noise threshold in ps.
-        Sort output - Sorts by test,pre,post,unit,delta,abs(delta).
-        Top 2 IDD2P/IDD6 registers - Reports only the top 2 IDD2P/IDD6 registers.
-        Only critical registers - Reports only critical registers.
-        Use tilda output format - Converts the output file from csv to tilda.
-        Use html output format - Converts the output file from csv to html.'''
-        hlp = re.sub('\n\s*', '\n', hlp) # remove leading whitespace from each line
-        t = CustomText(win, wrap='word', width=140, height=40, borderwidth=0)
+        win.title("Help")
+        hlp = '''
+        ARES Data Retrieval and Import Tool
+
+        This tool is a front end to the corresponding import and retrieval Python scripts,
+        developed to import data in CSV (or XML in the future) format into the ARES Hadoop
+        cluster, or retrieve data from it in and save them in the form of FITS files.
+
+        A set of parameters is needed for each operation, as well as a user-defined
+        configuration file.  This is further explained below.
+
+        
+        Import data files to ARES
+
+        For importing existing data, in the form of existing CSV files, the following
+        information is needed:
+
+        - Directory where the data files are stored or
+        - Wildcard template file name
+        - Description file (for non-existing parameters mainly)
+        - ARES Runtime folder.
+        - Import subdirectory where ARES should look for the files to be imported
+        - Type of the data in the files (in case it cannot be deduced by the system)
+        
+        If ARES Runtime folder is not specified, then ~/ARES_RUNTIME is assumed,
+        unless the environment variable ARES_RUNTIME is set.
+
+        Note that when specifying a definition file, the "paramdef|parameter" part of
+        the import folder must be omitted.
+
+
+        Data retrieval
+
+        For the retrieval of parameter data frmo the ARES cluster, in the form of
+        FITS files (with Binary Table Extensions), the following information is required:
+
+        - Parameter IDs (initial and final)
+        - Alternatively, a set of parameter IDs or names can be used (TBD)
+        - Size of ID block (for the split of the FITS files)
+        - Start and End data of the data block to be retrieved.
+
+        Note that the start and the end date can be specified in Year-Month-Day or
+        Year-Day_of_Year forms.
+
+        With this information, the system retrieves the data requested and stores them
+        in Binary Table Extensions in FITS files.  The size of ID block specifies the
+        maximum number of parameters stored in a single FITS file.
+'''
+        hlp = re.sub('\n +', '\n', hlp) # remove leading whitespace from each line
+        t = CustomText(win, wrap='word', width=65, height=40, borderwidth=20, relief=FLAT)
         t.pack(sid='top',fill='both',expand=True)
+        t.tag_configure('title', font=('Times', 16, 'bold'), justify=CENTER)
+        t.tag_configure('subtitle', font=('Times', 12, 'bold italic'))
+        t.tag_configure('centered', justify=CENTER)
+        t.tag_configure('emph', font=('Times', 9, 'bold italic'))
         t.tag_configure('blue', foreground='blue')
         t.tag_configure('red', background='red')
-        t.tag_configure('important', foreground='red')
         t.insert('1.0', hlp)
-        t.insert('end', 'first text', ('important'))
-        t.insert('end', 'second text', ('important'))
-        t.apply_tag(tag='blue', pattern='^.*? - ')
-        t.apply_tag(tag='important', pattern='output', regexp=False)
+        t.apply_tag(tag='title', pattern='^ARES Data Retrieval and Import Tool')
+        t.apply_tag(tag='subtitle', pattern='^Import data files to ARES')
+        t.apply_tag(tag='subtitle', pattern='^Data retrieval')
+        t.apply_tag(tag='blue', pattern='ARES_RUNTIME', )
+        t.apply_tag(tag='emph', pattern='(Year-Month-Day|Year-Day_of_Year|CSV|XML| ARES |FITS)')
+        t.apply_tag(tag='blue', pattern='^- .*')
         ttk.Button(win, text='OK', command=win.destroy).pack()
 
     def about(self):
@@ -447,11 +558,53 @@ class App:
         '''
         self.parent.destroy()
 
+    def readConfig(self):
+        self.home = os.getenv('HOME')
+        self.cfgFolder = '{}/.config/aresri'.format(self.home)
+        self.cfgFile = os.path.join(self.cfgFolder, 'aresri.json')
+        createDirIfNotExist(the_dir=self.cfgFolder)
+        if os.path.isfile(self.cfgFile):
+            with open(self.cfgFile, 'r') as cfgf:
+                self.cfgData = json.load(cfgf)
+        else:
+            self.cfgData = {
+                'db': {
+                    'host': '10.66.180.15',
+                    'port': 3306,
+                    'user': 'ares',
+                    'pwd': '$$ares$$',
+                    'db': 'ARES_DB'
+                },
+                'ares_runtime': os.path.join(self.home, 'ARES_RUNTIME'),
+                'pyares_config': os.path.join(self.cfgFolder, 'retrieval_config.ini'),
+                'import_config': os.path.join(self.cfgFolder, 'import_config.ini')
+            }
+            self.writeConfig()
+
+        RetrievalConfigFile = self.cfgData['pyares_config']
+        ImportConfigFile = self.cfgData['import_config']
+
+    def writeConfig(self):
+        with open(self.cfgFile, 'w') as cfgf:
+            json.dump(self.cfgData, cfgf)
+
     def menuCallback(self, item):
         '''
         Callback for the menu bar menu options
         '''
         pass
+
+    def selectParamIds(self):
+        self.spbxFromPid.enable()
+        self.spbxToPid.enable()
+        self.spbxPidsBlock.enable()
+        self.lstParamNames.config(state=DISABLED)
+
+    def selectParamNames(self):
+        self.spbxFromPid.disable()
+        self.spbxToPid.disable()
+        self.spbxPidsBlock.disable()
+        self.lstParamNames.config(state=NORMAL)
 
     def retrieveData(self):
         '''
