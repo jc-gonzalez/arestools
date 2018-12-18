@@ -57,7 +57,7 @@ class Importer(object):
     AresFileTypes = {}
     AresFileTypesCfgFile = "import_file_types.json"
 
-    def __init__(self, data_dir=None, input_file=None, def_file=None,
+    def __init__(self, data_dir=None, input_file=None, desc_file=None,
                  ares_runtime=None, import_dir=None, data_type=None,
                  batch_mode=False):
         '''
@@ -69,7 +69,7 @@ class Importer(object):
         self.ares_runtime = Importer.AresRuntimeDir
         self.data_type = data_type
         self.import_dir = None
-        self.def_file = def_file
+        self.desc_file = desc_file
         self.input_file = input_file
 
         self.batch_mode = batch_mode
@@ -79,7 +79,7 @@ class Importer(object):
         self.num_of_failed_files = 0
         self.ares_data_types = {}
         self.hasCompiledPatterns = False
-            
+
         this_script_dir = os.path.dirname(os.path.realpath(__file__))
         cfg_file = this_script_dir + '/../' + Importer.AresFileTypesCfgFile
         logging.info('Reading import script config. file {0}'.format(cfg_file))
@@ -95,8 +95,7 @@ class Importer(object):
         except:
             self.error_msg('Import script config. file not found in {0}'
                       .format(cfg_file))
-            
-        #pprint(self.ares_data_types)
+
         logging.info('-'*60)
 
         if ares_runtime:
@@ -105,7 +104,7 @@ class Importer(object):
         if not os.path.isdir(self.ares_runtime):
             self.error_msg('ARES system runtime folder {0} does not exist'
                       .format(self.ares_runtime))
-            
+
         logging.info('ARES system runtime folder is {0}'.format(self.ares_runtime))
         self.ares_import = self.ares_runtime + '/import'
         logging.info('ARES import folder is {0}'.format(self.ares_import))
@@ -118,20 +117,20 @@ class Importer(object):
             if not os.path.isdir(self.data_dir):
                 self.error_msg('Specified input data folder {0} does not exist'
                           .format(self.data_dir))
-                
+
             self.input_files = glob.glob(self.data_dir + '/*.dat')
         elif input_file:
             self.input_files = glob.glob(self.input_file)
         else:
             self.input_files = []
             self.error_msg('No input files provided.')
-            
+
         logging.debug(self.input_files)
         self.num_of_files = len(self.input_files)
 
         if self.num_of_files < 1:
             self.error_msg('No data files found for ingestion')
-            
+
         if import_dir:
             if not os.path.isdir(import_dir):
                 self.error_msg('Location for importing input files {0} does not exist'
@@ -144,7 +143,7 @@ class Importer(object):
         else:
             logging.fatal(msg)
             os._exit(1)
-            
+
     def set_predef_type_patterns(self, patdict):
         '''
         Use as patterns the ones provided by the user
@@ -155,7 +154,7 @@ class Importer(object):
             self.hasCompiledPatterns = True
         except:
             self.error_msg('Problem while compiling user provided patterns')
-            
+
     def compile_patterns(self):
         '''
         Compile patterns used to define file data type
@@ -225,30 +224,30 @@ class Importer(object):
 
         return result
 
-    def import_definitions(self):
+    def import_descriptions(self):
         '''
-        Makes an import of a CSV definition file.
+        Makes an import of a CSV description file.
         It is assumed that the 'paramdef' part in the import folder name is missing
         '''
         if not self.import_dir:
-            self.error_msg('Import folder for definition file is missing!')
-        
-        fimport_dir = 'paramdef/' + self.import_dir
-        logging.info('Import folder for definition file is {0}'.format(fimport_dir))
+            self.error_msg('Import folder for description file is missing!')
 
-        fname = self.def_file
-        logging.info('Preparing import of definition file: {0}'
+        fimport_dir = 'paramdef/' + self.import_dir
+        logging.info('Import folder for description file is {0}'.format(fimport_dir))
+
+        fname = self.desc_file
+        logging.info('Preparing import of description file: {0}'
                      .format(fname))
 
         import_dir = self.ares_import + '/' + fimport_dir
-        logging.info('Data type: {0} (folder: {1})'.format('DEF_FILE',import_dir))
+        logging.info('Data type: {0} (folder: {1})'.format('DESC_FILE',import_dir))
 
         # Copy def file to import folder
         copy(fname, import_dir)
 
         if not self.wait_until_import_is_successful():
-            self.error_msg('Import of definition file failed. Exiting.')
-            
+            self.error_msg('Import of description file failed. Exiting.')
+
         self.import_dir = 'parameter/' + self.import_dir
 
     def update_stats_on_result(self, result):
@@ -353,15 +352,12 @@ class Importer(object):
         '''
         if self.num_of_files < 1:
             return
-        
+
         if not self.hasCompiledPatterns:
             logging.error('No patterns file was found nor patterns were provided by the user')
             #os._exit(1)
 
         #self.compile_patterns()
-
-        if self.def_file:
-            self.import_definitions()
 
         logging.info('Import process starting')
         logging.info('-'*60)
@@ -370,6 +366,11 @@ class Importer(object):
         self.do_import_from_dir()
         #else:
         #    self.do_import_single_file()
+
+        if self.desc_file:
+            logging.info('-'*60)
+            logging.info('Importing parameter descriptions . . .')
+            self.import_descriptions()
 
         logging.info('-'*60)
         logging.info('Import process completed.')
