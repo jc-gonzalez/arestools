@@ -39,6 +39,7 @@ from .simpleeditor import launch_modal_editor
 from .gui_elements import EntrySpinbox, YMDSpinboxes,  YDoYSpinboxes,  HMSmsSpinboxes, DateTime, StatusBar, CustomText
 from aresdb.aresdb import AresDBConnection
 from ares_import.ares_import import Importer
+from ares_retrieve.ares_retrieve import Retriever
 
 # details
 __author__ = "J C Gonzalez"
@@ -644,9 +645,24 @@ class App:
         print(json.dumps(self.getRetrievalParams()))
         self.retrOut.delete('1.0', END)
         self.retrOut.pack(expand=Y, fill=BOTH)
-        for path in run('find . -name "*.so" -ls'):
-            print(path)
-            self.retrOut.insert(END, path)
+        #for path in run('find . -name "*.so" -ls'):
+        #    print(path)
+        #    self.retrOut.insert(END, path)
+        retrParams = self.getRetrievalParams()
+
+        tm_start = (list(retrParams['from_date_time'][retrParams['from_date_time']['mode']]) +
+                    list(retrParams['from_date_time']['time']))
+        tm_end = (list(retrParams['to_date_time'][retrParams['to_date_time']['mode']]) +
+                  list(retrParams['to_date_time']['time']))
+        pid1, pid2, pidblk = (retrParams['from_pid'], retrParams['to_pid'], retrParams['pids_step'])
+
+        retriever = Retriever(cfg_file=self.cfgData['pyares_config'],
+                              rqst_mode='pid',
+                              from_pid=pid1, to_pid=pid2, pids_block=pidblk,
+                              from_date=tm_start, to_date=tm_end,
+                              output_dir='./')
+
+        retr_time_total, conv_time_total, full_time_total, param_names_invalid, gen_files = retriever.run()
 
     def editRetrCfg(self):
         '''
@@ -669,9 +685,9 @@ class App:
         Get JSON object with the current retrieval configuration parameters
         '''
         return {
-            'from_pid': self.spbxFromPid.get(),
-            'to_pid': self.spbxToPid.get(),
-            'pids_step': self.spbxPidsBlock.get(),
+            'from_pid': int(self.spbxFromPid.get()),
+            'to_pid': int(self.spbxToPid.get()),
+            'pids_step': int(self.spbxPidsBlock.get()),
             'from_date_time': self.fromDateTime.get(),
             'to_date_time': self.toDateTime.get()
         }
