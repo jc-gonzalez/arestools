@@ -59,7 +59,7 @@ class Importer(object):
 
     def __init__(self, data_dir=None, input_file=None, desc_file=None,
                  ares_runtime=None, import_dir=None, data_type=None,
-                 batch_mode=False):
+                 batch_mode=False, cfg_file=None):
         '''
         Instance initialization method
         '''
@@ -68,7 +68,6 @@ class Importer(object):
         self.data_dir = data_dir
         self.ares_runtime = Importer.AresRuntimeDir
         self.data_type = data_type
-        self.import_dir = None
         self.desc_file = desc_file
         self.input_file = input_file
 
@@ -80,8 +79,10 @@ class Importer(object):
         self.ares_data_types = {}
         self.hasCompiledPatterns = False
 
-        this_script_dir = os.path.dirname(os.path.realpath(__file__))
-        cfg_file = this_script_dir + '/../' + Importer.AresFileTypesCfgFile
+        if not cfg_file:
+            this_script_dir = os.path.dirname(os.path.realpath(__file__))
+            cfg_file = this_script_dir + '/../' + Importer.AresFileTypesCfgFile
+        
         logging.info('Reading import script config. file {0}'.format(cfg_file))
         try:
             with open(cfg_file) as fcfg:
@@ -132,10 +133,13 @@ class Importer(object):
             self.error_msg('No data files found for ingestion')
 
         if import_dir:
-            if not os.path.isdir(import_dir):
-                self.error_msg('Location for importing input files {0} does not exist'
-                          .format(import_dir))
             self.import_dir = import_dir
+        else:
+            self.import_dir = 'parameter'
+            
+        if not os.path.isdir('{}/{}'.format(self.ares_import, self.import_dir)):
+            self.error_msg('Location for importing input files {0} does not exist'
+                           .format(self.import_dir))
 
     def error_msg(self, msg):
         if self.batch_mode:
@@ -218,7 +222,9 @@ class Importer(object):
                     if re.search(r' - Import of task .* failed', line1):
                         result = False
                         end_monitor = True
-                    continue
+                    if re.search(r'_PARAM_DEF_', line2):
+                        result = True
+                        end_monitor = True
 
                 # Otherwise, keep monitoring
 
@@ -227,12 +233,14 @@ class Importer(object):
     def import_descriptions(self):
         '''
         Makes an import of a CSV description file.
-        It is assumed that the 'paramdef' part in the import folder name is missing
+        It is assumed that the 'paramdef' part in the import folder name must be
+        placed instead of the 'parameter'.
         '''
         if not self.import_dir:
             self.error_msg('Import folder for description file is missing!')
 
-        fimport_dir = 'paramdef/' + self.import_dir
+        fimport_dir = self.import_dir
+        fimport_dir = fimport_dir.replace('parameter', 'paramdef')
         logging.info('Import folder for description file is {0}'.format(fimport_dir))
 
         fname = self.desc_file
@@ -248,7 +256,7 @@ class Importer(object):
         if not self.wait_until_import_is_successful():
             self.error_msg('Import of description file failed. Exiting.')
 
-        self.import_dir = 'parameter/' + self.import_dir
+        #self.import_dir = 'parameter/' + self.import_dir
 
     def update_stats_on_result(self, result):
         '''
@@ -261,7 +269,7 @@ class Importer(object):
             self.num_of_failed_files += 1
             logging.warn('Data file importing failed!')
 
-    def do_import_from_dir(self):
+    def do_import_files(self):
         '''
         Loop over input files, to import each of them sequentally
         '''
@@ -304,48 +312,6 @@ class Importer(object):
             import_result = self.wait_until_import_is_successful()
             self.update_stats_on_result(import_result)
 
-    def do_import_single_file(self):
-        '''
-        Loop over input files, to import each of them sequentally
-        '''
-
-        fname = self.input_file
-        logging.info('Preparing import of file {0} of {1}: {2}'
-                     .format(1, self.num_of_files, fname))
-
-        # Detect data type
-        ftype = None
-        fimport_dir = ''
-        if self.import_dir:
-            ftype = '<assumed from specified folder>'
-            fimport_dir = self.import_dir
-        else:
-            if self.data_type:
-                ftype = self.data_type
-                fimport_dir = self.ares_data_types[ftype]['dir']
-            else:
-                for typ, typ_info in self.ares_data_types.items():
-                    rx = typ_info['re']
-                    if rx.match(os.path.basename(fname)):
-                        ftype = typ
-                        fimport_dir = typ_info['dir']
-                        break
-
-        if not ftype:
-            logging.warn('Unidentified data file type. Failed import.')
-            self.num_of_failed_files += 1
-            return
-
-        import_dir = self.ares_import + "/" + fimport_dir
-        logging.info('Data type: {0} (folder: {1})'.format(ftype,import_dir))
-
-        # Copy data file to import folder
-        copy(fname, import_dir)
-
-        # Wait for the result
-        import_result = self.wait_until_import_is_successful()
-        self.update_stats_on_result(import_result)
-
     def run_import(self):
         '''
         Execute import, for one single file or an entire directory, if specified
@@ -362,10 +328,7 @@ class Importer(object):
         logging.info('Import process starting')
         logging.info('-'*60)
 
-        #if self.data_dir:
-        self.do_import_from_dir()
-        #else:
-        #    self.do_import_single_file()
+        self.do_import_files()
 
         if self.desc_file:
             logging.info('-'*60)

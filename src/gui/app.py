@@ -38,6 +38,7 @@ import json
 from .simpleeditor import launch_modal_editor
 from .gui_elements import EntrySpinbox, YMDSpinboxes,  YDoYSpinboxes,  HMSmsSpinboxes, DateTime, StatusBar, CustomText
 from aresdb.aresdb import AresDBConnection
+from ares_import.ares_import import Importer
 
 # details
 __author__ = "J C Gonzalez"
@@ -68,14 +69,25 @@ def run(command):
     '''
     Executes a command and returns the list of lines in stdout
     '''
-    process = subprocess.Popen(command, stdout=subprocess.PIPE, shell=True)
-    while True:
-        line = process.stdout.readline() #.rstrip()
-        if not line:
-            break
-        yield line.decode('utf-8')
+    #process = subprocess.Popen(command, stdout=subprocess.PIPE, shell=True)
+    #while True:
+    #    line = process.stdout.readline() #.rstrip()
+    #    if not line:
+    #        break
+    #    yield line.decode('utf-8')
+
+    popen = subprocess.Popen(command, stdout=subprocess.PIPE, universal_newlines=True)
+    for stdout_line in iter(popen.stdout.readline, ""):
+        yield stdout_line 
+    popen.stdout.close()
+    return_code = popen.wait()
+    if return_code:
+        raise subprocess.CalledProcessError(return_code, command)
 
 def createDirIfNotExist(the_dir=None):
+    '''
+    Creates a directory if it does not yet exist
+    '''
     if the_dir:
         if not os.path.exists(the_dir):
             try:
@@ -88,9 +100,10 @@ class App:
     '''
     Main application class for the GUI
     '''
+    
     def __init__(self, parent):
         '''
-        Initialize the class
+        Initialize the class data members and build the entire GUI
         '''
         self.parent = parent
 
@@ -99,7 +112,7 @@ class App:
         self.db = AresDBConnection(connection = self.cfgData['db'])
 
         self.paramNames = self.db.getParamNames()
-        
+
         #=== Variables
 
         self.from_pid, self.to_pid, self.pids_step = (0, 0, 0)
@@ -120,6 +133,12 @@ class App:
         self.retrPidBlk = StringVar()
         self.retrPidBlk.set(10)
 
+        self.retrieveConfigFileContent = getContentOfFile(file=self.retrieveConfigFile.get())
+        self.importConfigFileContent = getContentOfFile(file=self.importConfigFile.get())
+        self.importRegisteredDataTypes = list(json.loads(self.importConfigFileContent).keys())
+
+        parent.title('ARES Import & Retrieval Tool')
+        
         #=== Dialog menu bar
 
         menu = Menu(parent)
@@ -127,9 +146,9 @@ class App:
 
         filemenu = Menu(menu)
         menu.add_cascade(label='File', menu=filemenu)
-        filemenu.add_command(label='New', command=self.menuCallback)
-        filemenu.add_command(label='Open...', command=self.menuCallback)
-        filemenu.add_separator()
+        #filemenu.add_command(label='New', command=self.menuCallback)
+        #filemenu.add_command(label='Open...', command=self.menuCallback)
+        #filemenu.add_separator()
         filemenu.add_command(label='Quit', command=self.quit)
 
         helpmenu = Menu(menu)
@@ -182,7 +201,7 @@ class App:
         scrollParName = ttk.Scrollbar(frm111, orient="vertical")
         scrollParName.config(command=self.lstParamNames.yview)
         scrollParName.pack(side=RIGHT, fill=Y)
-        
+
         self.lstParamNames.config(yscrollcommand=scrollParName.set)
 
         self.spbxFromPid = EntrySpinbox(frm112, label='From Param Id.:', first=1, last=50000)
@@ -204,25 +223,6 @@ class App:
 
         self.paramRqstMode.set('name')
         self.selectParamNames()
-
-        # frm111 = ttk.Frame(lfrm11)
-        # frm112 = ttk.Frame(lfrm11) 
-        # 
-        # self.spbxFromPid = EntrySpinbox(frm111, label='From Param Id.:', first=1, last=50000)
-        # self.spbxFromPid.set(self.retrFromPid.get())
-        # self.spbxFromPid.pack(side=LEFT, fill=X, expand=Y)
-        # self.spbxToPid = EntrySpinbox(frm111, label='To Param Id.:', first=1, last=50000)
-        # self.spbxToPid.set(self.retrToPid.get())
-        # self.spbxToPid.pack(side=RIGHT, fill=X, expand=Y)
-        # 
-        # self.spbxPidsBlock = EntrySpinbox(frm112, label='Param. Ids. block size (for FITS files)',
-        #                                   first=1, last=50000)
-        # self.spbxPidsBlock.set(self.retrPidBlk.get())
-        # self.spbxPidsBlock.pack(side=LEFT, fill=X, expand=Y)
-        # ttk.Label(frm112, text='', width=20).pack(side=LEFT, fill=X, expand=Y)
-        # 
-        # frm111.pack(fill=X, expand=Y)
-        # frm112.pack(fill=X, expand=Y)
 
         #----- Third section - Date range
 
@@ -276,7 +276,7 @@ class App:
         self.imprtCfgFileShow = ttk.Entry(frm21, textvariable=self.importConfigFile,state='readonly')
         self.imprtCfgFileShow.pack(side=LEFT, expand=1, fill=X, padx=2, pady=2)
 
-        #----- Second section - Retrieval parameters
+        #----- Second section - Input data
 
         lfrm21 = ttk.LabelFrame(tab1, text='Input data source')
 
@@ -286,7 +286,8 @@ class App:
 
         frm211 = ttk.Frame(lfrm21)
         frm212 = ttk.Frame(lfrm21)
-        
+        frm213 = ttk.Frame(lfrm21)
+
         rbtnInp0 = ttk.Radiobutton(frm211, text='Input directory', command=self.useInputDir,
                                    variable=self.inputMode, value='dir', width=14)
         rbtnInp0.pack(side=LEFT, padx=10, pady=2, expand=Y, fill=X)
@@ -295,7 +296,7 @@ class App:
         ttk.Button(frm211, text='...', command=self.setInputDir, width=2)\
             .pack(side=RIGHT, padx=2, pady=2)
         frm211.pack(expand=Y, fill=X)
-        
+
         rbtnInp1 = ttk.Radiobutton(frm212, text='Input files', command=self.useInputFiles,
                                    variable=self.inputMode, value='files', width=14)
         rbtnInp1.pack(side=LEFT, padx=10, pady=2, expand=Y, fill=X)
@@ -307,59 +308,65 @@ class App:
 
         self.inputMode.set('dir')
 
-        #----- Third section - Retrieval parameters
+        self.paramImpFolder = StringVar()
+
+        ttk.Label(frm213, text="Parameter import folder (optional): ")\
+           .pack(side=LEFT, padx=10, pady=2)
+        #self.edParImportFolder = ttk.Entry(frm213, textvariable=self.paramImpFolder)
+        #self.edParImportFolder.pack(side=LEFT, expand=Y, fill=X, padx=2, pady=2)
+        self.cboxParamDataType = ttk.Combobox(frm213, textvariable=self.paramImpFolder)
+        self.cboxParamDataType.pack(side=LEFT, expand=Y, fill=X, padx=2, pady=2)
+        frm213.pack(expand=Y, fill=X)
+
+        #----- Third section - ARES Runtime folder
 
         lfrm22 = ttk.LabelFrame(tab1, text='ARES Runtime directory')
 
         self.aresRunTime = StringVar()
         if 'ARES_RUNTIME' in os.environ:
-            self.aresRunTime = os.environ['ARES_RUNTIME']
-            self.cfgData['ares_runtime'] = self.aresRunTime
+            self.aresRunTime.set(os.environ['ARES_RUNTIME'])
+            self.cfgData['ares_runtime'] = self.aresRunTime.get()
             self.writeConfig()
         else:
-            self.aresRunTime = self.cfgData['ares_runtime']
-            
+            self.aresRunTime.set(self.cfgData['ares_runtime'])
+
         self.edAresRunTime = ttk.Entry(lfrm22, textvariable=self.aresRunTime)
         self.edAresRunTime.pack(side=LEFT, expand=Y, fill=X, padx=2, pady=2)
         ttk.Button(lfrm22, text='...', command=self.setAresRunTime, width=2)\
             .pack(side=RIGHT, padx=2, pady=2)
 
-        #----- Fourth section - Retrieval parameters
+        self.aresRunTime.trace("w", lambda name, index, mode, sv=self.aresRunTime: self.onChangedRunTime(sv))
+        self.onChangedRunTime(self.aresRunTime)
+
+        #----- Fourth section - Parameter descriptions
 
         lfrm23 = ttk.LabelFrame(tab1, text='New parameter description')
 
         frm231 = ttk.Frame(lfrm23)
         frm232 = ttk.Frame(lfrm23)
-        frm233 = ttk.Frame(lfrm23)
 
         self.useParamDescripFile = StringVar()
         self.descFile = StringVar()
-        self.paramImpFolder = StringVar()
 
-        chkUseDescFile = ttk.Checkbutton(frm231, text="Use parameter description file", 
+        chkUseDescFile = ttk.Checkbutton(frm231, text="Use parameter description file",
 	                                 command=self.changedUseParamDescFile,
                                          variable=self.useParamDescripFile,
-	                                 onvalue='yes', offvalue='no')
-        chkUseDescFile.pack(side=LEFT, pady=2)
+                                         onvalue='yes', offvalue='no')
+        chkUseDescFile.pack(side=LEFT, pady=2, padx=6)
         frm231.pack(expand=Y, fill=X)
-        
+
         ttk.Label(frm232, text="Description file: ")\
-           .pack(side=LEFT, padx=10, pady=2)
+           .pack(side=LEFT, padx=14, pady=2)
         self.edDescripFile = ttk.Entry(frm232, textvariable=self.descFile)
         self.edDescripFile.pack(side=LEFT, expand=Y, fill=X, padx=2, pady=2)
-        ttk.Button(frm232, text='...', command=self.setAresRunTime, width=2)\
+        ttk.Button(frm232, text='...', command=self.setDescripFile, width=2)\
             .pack(side=RIGHT, padx=2, pady=2)
         frm232.pack(expand=Y, fill=X)
 
-        ttk.Label(frm233, text="Parameter import folder: ")\
-           .pack(side=LEFT, padx=10, pady=2)
-        self.edParImportFolder = ttk.Entry(frm233, textvariable=self.paramImpFolder)
-        self.edParImportFolder.pack(side=LEFT, expand=Y, fill=X, padx=2, pady=2)
-        #ttk.Button(frm232, text='...', command=self.setAresRunTime, width=2)\
-        #    .pack(side=RIGHT, padx=2, pady=2)
-        frm233.pack(expand=Y, fill=X)
+        self.useParamDescripFile.set('no')
+        self.changedUseParamDescFile()
 
-        #----- Fifth section - Retrieval parameters
+        #----- Fifth section - Import data type
 
         lfrm24 = ttk.LabelFrame(tab1, text='Import data types')
 
@@ -369,19 +376,22 @@ class App:
         self.useSameParamDataType = StringVar()
         self.paramDataType = StringVar()
 
-        chkUseSameParamDataType = ttk.Checkbutton(frm241, text="Assume same data type for all import data files", 
+        chkUseSameParamDataType = ttk.Checkbutton(frm241, text="Assume same data type for all import data files",
 	                                          command=self.changedUseSameParamDataType,
                                                   variable=self.useSameParamDataType,
 	                                          onvalue='yes', offvalue='no')
-        chkUseSameParamDataType.pack(side=LEFT, pady=2)
+        chkUseSameParamDataType.pack(side=LEFT, pady=2, padx=6)
         frm241.pack(expand=Y, fill=X)
-        
+
         ttk.Label(frm242, text="Parameter data type: ")\
-           .pack(side=LEFT, padx=10, pady=2)
+           .pack(side=LEFT, padx=14, pady=2)
         self.cboxParamDataType = ttk.Combobox(frm242, textvariable=self.paramDataType)
         self.cboxParamDataType.pack(side=LEFT, expand=Y, fill=X, padx=2, pady=2)
-        self.cboxParamDataType['values'] = ('uno', 'dos', 'tres')
+        self.cboxParamDataType['values'] = self.importRegisteredDataTypes
         frm242.pack(expand=Y, fill=X)
+
+        self.useSameParamDataType.set('no')
+        self.changedUseSameParamDataType()
 
         #----- Sixth section - button to activate the process
 
@@ -428,7 +438,7 @@ class App:
         vscroll1.pack(side=RIGHT, fill=Y)
         self.txtRetrCfg.pack(fill=BOTH, expand=Y, padx=2, pady=2)
 
-        self.txtRetrCfg.insert(END, getContentOfFile(file=self.retrieveConfigFile.get()))
+        self.txtRetrCfg.insert(END, self.retrieveConfigFileContent)
 
         frm311.pack(side=TOP, expand=N, fill=X, padx=6, pady=6)
         frm312.pack(expand=Y, fill=BOTH, ipadx=10, ipady=10)
@@ -451,7 +461,7 @@ class App:
         vscroll2.pack(side=RIGHT, fill=Y)
         self.txtImprtCfg.pack(fill=BOTH, expand=Y, padx=2, pady=2)
 
-        self.txtImprtCfg.insert(END, getContentOfFile(file=self.importConfigFile.get()))
+        self.txtImprtCfg.insert(END, self.importConfigFileContent)
 
         frm321.pack(side=TOP, expand=N, fill=X, padx=6, pady=6)
         frm322.pack(side=TOP, expand=Y, fill=BOTH, ipadx=10, ipady=10)
@@ -469,6 +479,9 @@ class App:
         status.set("Loaded.")
 
     def help(self):
+        '''
+        Show a short help information
+        '''
         win = Toplevel(self.parent)
         win.title("Help")
         hlp = '''
@@ -481,7 +494,7 @@ class App:
         A set of parameters is needed for each operation, as well as a user-defined
         configuration file.  This is further explained below.
 
-        
+
         Import data files to ARES
 
         For importing existing data, in the form of existing CSV files, the following
@@ -493,7 +506,7 @@ class App:
         - ARES Runtime folder.
         - Import subdirectory where ARES should look for the files to be imported
         - Type of the data in the files (in case it cannot be deduced by the system)
-        
+
         If ARES Runtime folder is not specified, then ~/ARES_RUNTIME is assumed,
         unless the environment variable ARES_RUNTIME is set.
 
@@ -537,6 +550,9 @@ class App:
         ttk.Button(win, text='OK', command=win.destroy).pack()
 
     def about(self):
+        '''
+        Show simple About... dialog
+        '''
         win = Toplevel(self.parent)
         win.title("About")
         t = CustomText(win, wrap='word', width=60, height=9, borderwidth=0)
@@ -559,6 +575,9 @@ class App:
         self.parent.destroy()
 
     def readConfig(self):
+        '''
+        Read application configuration from appropriate .config folder in HOME directory
+        '''
         self.home = os.getenv('HOME')
         self.cfgFolder = '{}/.config/aresri'.format(self.home)
         self.cfgFile = os.path.join(self.cfgFolder, 'aresri.json')
@@ -577,7 +596,7 @@ class App:
                 },
                 'ares_runtime': os.path.join(self.home, 'ARES_RUNTIME'),
                 'pyares_config': os.path.join(self.cfgFolder, 'retrieval_config.ini'),
-                'import_config': os.path.join(self.cfgFolder, 'import_config.ini')
+                'import_config': os.path.join(self.cfgFolder, 'import_config.json')
             }
             self.writeConfig()
 
@@ -585,6 +604,9 @@ class App:
         ImportConfigFile = self.cfgData['import_config']
 
     def writeConfig(self):
+        '''
+        Write configuration to appropriate .config folder in HOME directory
+        '''
         with open(self.cfgFile, 'w') as cfgf:
             json.dump(self.cfgData, cfgf)
 
@@ -605,6 +627,14 @@ class App:
         self.spbxToPid.disable()
         self.spbxPidsBlock.disable()
         self.lstParamNames.config(state=NORMAL)
+
+    def greetings(self, msg):
+        '''
+        Says hello
+        '''
+        logging.info('='*60)
+        logging.info(msg)
+        logging.info('='*60)
 
     def retrieveData(self):
         '''
@@ -642,34 +672,112 @@ class App:
             'from_pid': self.spbxFromPid.get(),
             'to_pid': self.spbxToPid.get(),
             'pids_step': self.spbxPidsBlock.get(),
-            'from_date_time': self.fromDateTime.get(), 
+            'from_date_time': self.fromDateTime.get(),
             'to_date_time': self.toDateTime.get()
         }
 
     def importData(self):
-        pass
+        '''
+        Callback for data import into ARES cluster database
+        '''
+        self.greetings('ARES Import & Retrieval Tool - Data Import')
+        imprtParams = self.getImportParameters()
+        print(json.dumps(imprtParams))
+        importer = Importer(data_dir=imprtParams['input_dir'],
+                            input_file=imprtParams['input_files'],
+                            desc_file=imprtParams['description_file'],
+                            import_dir=imprtParams['import_dir'],
+                            ares_runtime=imprtParams['ares_runtime'],
+                            data_type=imprtParams['data_type'],
+                            cfg_file=self.cfgData['import_config'],
+                            batch_mode=True)
+        importer.run_import()
+
+    def getImportParameters(self):
+        '''
+        Get JSON object with the current import configuration parameters
+        '''
+        useParDescFile = (self.useParamDescripFile.get() == 'yes')
+        useCommonParDataType = (self.useSameParamDataType.get() == 'yes')
+
+        return {
+            'input_dir': self.inputDir.get(),
+            'input_files': self.inputFiles.get(),
+            'ares_runtime': self.aresRunTime.get(),
+            'description_file': self.descFile.get() if useParDescFile else '',
+            'import_dir': self.paramImpFolder.get(),
+            'data_type': self.paramDataType.get() if useCommonParDataType else ''
+        }
 
     def useInputDir(self):
-        pass
+        '''
+        Activate the selection of an input data folder
+        '''
+        self.edInputDir.config(state=NORMAL)
+        self.edInputFiles.config(state=DISABLED)
 
     def useInputFiles(self):
-        pass
+        '''
+        Activate the selection of a input file (or template)
+        '''
+        self.edInputDir.config(state=DISABLED)
+        self.edInputFiles.config(state=NORMAL)
 
     def setInputDir(self):
-        pass
+        '''
+        Allow the user to select the input directory with the files to be imported
+        '''
+        dirpath = filedialog.askdirectory()
+        if dirpath != None  and dirpath != '':
+            self.inputDir.set(dirpath)
 
     def setInputFiles(self):
-        pass
+        '''
+        Allow the user to select an input file
+        '''
+        filepath = filedialog.askopenfilename()
+        if filepath != None  and filepath != '':
+            self.inputFiles.set(filepath)
 
     def setAresRunTime(self):
-        pass
+        '''
+        Allow the user to select the ARES Run Time folder
+        '''
+        dirpath = filedialog.askdirectory()
+        if dirpath != None  and dirpath != '':
+            self.aresRunTime.set(dirpath)
+
+    def onChangedRunTime(self, sv):
+        importFldr = '{}/import'.format(self.cfgData['ares_runtime'])
+        self.importFolders = [x[0].replace(importFldr + '/','')
+                              for x in os.walk(importFldr)
+                              if not re.search('failed', x[0])][1:]
+        self.cboxParamDataType['values'] = self.importFolders
+
+    def setDescripFile(self):
+        '''
+        Requests the user a description file
+        '''
+        filepath = filedialog.askopenfilename()
+        if filepath != None  and filepath != '':
+            self.descFile.set(filepath)
 
     def changedUseParamDescFile(self):
-        pass
+        '''
+        Activate description file line edit or disable it
+        '''
+        activate = (self.useParamDescripFile.get() == 'yes')
+        new_state = NORMAL if activate else DISABLED
+        self.edDescripFile.config(state=new_state)
 
     def changedUseSameParamDataType(self):
-        pass
-    
+        '''
+        Activate combo box to select common datatype or disable it
+        '''
+        activate = (self.useSameParamDataType.get() == 'yes')
+        new_state = NORMAL if activate else DISABLED
+        self.cboxParamDataType.config(state=new_state)
+
     def editImprtCfg(self):
         '''
         Edit import into ARES parameter configuration file
