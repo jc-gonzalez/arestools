@@ -58,7 +58,7 @@ class DatabaseLayerImpl:
             result = cursor.fetchone()
         return result['PID']
 
-    def get_params_from_pids(self, frompid, topid, syselem):
+    def get_params_from_pids(self, frompid, topid, syselem=None):
         """
         Get the ID that corresponds with a certain parameter name and corresponding system element
         :param param_name: string that is the name of the parameter
@@ -67,8 +67,54 @@ class DatabaseLayerImpl:
         """
 
         with self.__connection.cursor() as cursor:
-            query = ("SELECT NAME FROM %s WHERE SYSTEM_ELEMENT='%s'" +
-                     " AND PID BETWEEN %s AND %s") % (self.__schema, syselem, frompid, topid)
+            query = ''
+            if not syselem:
+                query = ("SELECT NAME FROM %s WHERE " +
+                         " PID BETWEEN %s AND %s") % (self.__schema, frompid, topid)
+            else:
+                query = ("SELECT NAME FROM %s WHERE " +
+                         " SYSTEM_ELEMENT='%s'" +
+                         " AND PID BETWEEN %s AND %s") % (self.__schema, syselem, frompid, topid)
+            cursor.execute(query)
+            result = cursor.fetchall()
+
+        return result
+
+    def get_params_sysel_from_pids(self, frompid, topid, syselem=None):
+        """
+        Get the ID that corresponds with a certain parameter name and corresponding system element
+        :param param_name: string that is the name of the parameter
+        :param syselem: string that is the system element
+        :return: integer value that is the ID
+        """
+
+        with self.__connection.cursor() as cursor:
+            query = ''
+            if not syselem:
+                query = ("SELECT NAME,SYSTEM_ELEMENT FROM %s WHERE " +
+                         " PID BETWEEN %s AND %s") % (self.__schema, frompid, topid)
+            else:
+                query = ("SELECT NAME,SYSTEM_ELEMENT FROM %s WHERE " +
+                         " SYSTEM_ELEMENT='%s'" +
+                         " AND PID BETWEEN %s AND %s") % (self.__schema, syselem, frompid, topid)
+            cursor.execute(query)
+            result = cursor.fetchall()
+
+        return result
+
+    def get_params_pid_sysel_from_names(self, names):
+        """
+        Get the ID that corresponds with a certain parameter name and corresponding system element
+        :param param_name: string that is the name of the parameter
+        :param syselem: string that is the system element
+        :return: integer value that is the ID
+        """
+
+        with self.__connection.cursor() as cursor:
+            namelist = ','.join(["'{}'".format(name) for name in names])
+            query = ("SELECT PID,SYSTEM_ELEMENT FROM %s WHERE " +
+                     " NAME IN (%s)") % (self.__schema, namelist)
+            print(query)
             cursor.execute(query)
             result = cursor.fetchall()
 

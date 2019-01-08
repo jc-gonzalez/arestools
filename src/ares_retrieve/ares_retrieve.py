@@ -18,6 +18,7 @@ optional arguments:
   -t TO_PID, --to_pid TO_PID               Final parameter identifier
   -F Y DOY h m s, --from_date Y DOY h m s  Initial date in the format Y DOY h m s
   -T Y DOY h m s, --to_date Y DOY h m s    Final date in the format Y DOY h m s
+  -e SYS_ELEM                              Define system element (default:TM)
 
 Usage example:
 
@@ -101,8 +102,10 @@ def get_args():
                         help='Initial date in the format Y DOY h m s')
     parser.add_argument('-T', '--to_date', dest='to_date', type=int, nargs=5,
                         help='Final date in the format Y DOY h m s')
-    parser.add_argument('-n', '--num_pids_per_file', dest='num_pids_per_file', type=int, default=1000000,
-                        help='Maximum number of PIDs per file')
+    parser.add_argument('-n', '--num_pids_per_file', dest='num_pids_per_file', type=int,
+                        default=1000000, help='Maximum number of PIDs per file')
+    parser.add_argument('-e', '--sys_elem', dest='sys_elem', default='TM',
+                        help='Set System Element (default:TM)')
 
     return parser.parse_args()
 
@@ -160,7 +163,8 @@ class Retriever(object):
 
     def __init__(self, cfg_file=None, rqst_mode='pid',
                  from_pid=None, to_pid=None, pids_block=None, names=None,
-                 from_date=None, to_date=None, output_dir='./',
+                 from_date=None, to_date=None, sys_elem='TM',
+                 output_dir='./',
                  file_tpl='ares_%F-%T_%f-%t_%YMD1T%hms1-%YMD2T%hms2',
                  file_type='fits'):
         '''
@@ -176,23 +180,28 @@ class Retriever(object):
         logging.info('Reading retrieval script config. file {0}'.format(cfg_file))
 
         self.rqst_mode = rqst_mode
-        self.from_pid = from_pid
-        self.to_pid = to_pid
-        self.pid_blk = pids_block
 
         self.param_names = names
 
-        self.from_pid_blk = self.from_pid
-        self.to_pid_blk = self.from_pid_blk + self.pid_blk - 1
+        if self.rqst_mode == 'pid':
+            self.from_pid = from_pid
+            self.to_pid = to_pid
+            self.pid_blk = pids_block
+            self.from_pid_blk = self.from_pid
+            self.to_pid_blk = self.from_pid_blk + self.pid_blk - 1
+        else:
+            self.from_pid, self.to_pid = (1, 1)
+            self.from_pid_blk, self.to_pid_blk, self.pid_blk = (1, 1, 1)
+            self.name = 'PARAM'
 
         self.year1, self.doy1, self.hour1, self.min1, self.sec1, msec = from_date
-        self.sec1 = self.sec1 + msec
-        self.timestamp_start = unix_ydoy_to_ms(self.year1, self.doy1, self.hour1, self.min1, self.sec1)
+        self.timestamp_start = unix_ydoy_to_ms(self.year1, self.doy1, self.hour1, self.min1, self.sec1, msec)
+        self.sec1 = self.sec1 + msec * 0.001
         year, self.month1, self.day1 = ydoy_to_ymd(self.year1, self.doy1)
 
         self.year2, self.doy2, self.hour2, self.min2, self.sec2, msec = to_date
-        self.sec2 = self.sec2 + msec
-        self.timestamp_end = unix_ydoy_to_ms(self.year2, self.doy2, self.hour2, self.min2, self.sec2)
+        self.timestamp_end = unix_ydoy_to_ms(self.year2, self.doy2, self.hour2, self.min2, self.sec2, msec)
+        self.sec2 = self.sec2 + msec * 0.001
         year, self.month2, self.day2 = ydoy_to_ymd(self.year2, self.doy2)
 
         self.outdir = output_dir
@@ -203,9 +212,9 @@ class Retriever(object):
         logging.info('-'*60)
         logging.info("Retrieving samples for parameters with parameter ids in the range {0}:{1}"
                      .format(from_pid, to_pid))
-        logging.info("from the date {0}.{1}.{2:02d}:{3:02d}:{4:02d}"
+        logging.info("from the date {0}.{1}.{2:02d}:{3:02d}:{4:06.3f}"
                      .format(self.year1, self.doy1, self.hour1, self.min1, self.sec1))
-        logging.info("to the date {0}.{1}.{2:02d}:{3:02d}:{4:02d}"
+        logging.info("to the date {0}.{1}.{2:02d}:{3:02d}:{4:06.3f}"
                      .format(self.year2, self.doy2, self.hour2, self.min2, self.sec2))
         logging.info("and storing the data in FITS files, in blocks of {0} param.ids"
                      .format(self.pid_blk))
@@ -235,6 +244,7 @@ class Retriever(object):
         # Right now this is hardcoded into the initializer, so for config
         # you need to manage this yourself.
         data_provider = pa.init_param_sampleprovider()
+        data_provider.set_system_element_as_any()
 
         retr_time_total, conv_time_total = (0, 0)
 
@@ -252,10 +262,11 @@ class Retriever(object):
             prep_time = time.time()
 
             # Get parameter names for the range of parameter ids, and retrieve samples as DataFrame
-            param_names = data_provider.get_parameter_names_from_pids(i_pid, j_pid)
-            samples = data_provider.get_parameter_data_objs(param_names,
-                                                            self.timestamp_start,
-                                                            self.timestamp_end)
+            (param_names, param_syselem) = data_provider.get_parameter_names_from_pids(i_pid, j_pid)
+            samples = data_provider.get_parameter_sysel_data_objs(param_names,
+                                                                  param_syselem,
+                                                                  self.timestamp_start,
+                                                                  self.timestamp_end)
 
             # Set retrieval time stamp
             retr_time = time.time()
@@ -350,9 +361,118 @@ class Retriever(object):
 
     def run_retrieval_names(self):
         '''
-        Perform the retrieval of a list of names
+        Perform the retrieval of a range of PIDs
         '''
-        pass
+
+        # Get start time
+        start_time = time.time()
+        end_time = start_time
+
+        # Initalize the needed datasources.
+        # Right now this is hardcoded into the initializer, so for config
+        # you need to manage this yourself.
+        data_provider = pa.init_param_sampleprovider()
+        data_provider.set_system_element_as_any()
+
+        retr_time_total, conv_time_total = (0, 0)
+
+        param_names_invalid = {}
+        gen_files = []
+        var_name = ''
+        var_type = ''
+
+        # Set preparation time stamp
+        prep_time = time.time()
+
+        # Get parameter names for the range of parameter ids, and retrieve samples as DataFrame
+        (param_pids, param_syselem) = data_provider.get_parameter_pid_sysel_from_names(self.param_names)
+        samples = data_provider.get_parameter_sysel_data_objs(self.param_names,
+                                                              param_syselem,
+                                                              self.timestamp_start,
+                                                              self.timestamp_end)
+
+        # Set retrieval time stamp
+        retr_time = time.time()
+
+        for _name, _pid in zip(self.param_names, param_pids):
+
+            # Currently only FITS files are generated
+
+            # Build initial primary HDU for FITS file
+            hdul = self.fits_build_hdr(_pid, _pid)
+
+            # Convert sample columns to binary tables
+
+            for column in samples:
+
+                # Loop on samples to add values to the resulting vectors
+                time_stamps = []
+                values = []
+                start = True
+
+                for s in column:
+                    if start:
+                        var_name = s.get_name()
+                        var_type = s.get_type()
+                        if var_name != _name:
+                            logging.warning("ERROR: Param. name does not match with expectation!")
+                        logging.info('Generating table for PID {} - {} (type={})'
+                                     .format(_pid, var_name, var_type))
+                        start = False
+
+                    time_stamps.append(s.get_time())
+
+                    value = s.get_value()
+                    if var_type == DateTimeType:
+                        value = unix_ms_to_datestr(value)
+
+                    values.append(value)
+
+                    if var_type == DateTimeType:
+                        var_type = StringType
+
+                if start:
+                    param_names_invalid[str(_pid - 1)] = _name
+                    continue
+
+                type_conv = Ares2FitsConversion[str(var_type)]
+                if var_type == StringType:
+                    size_fld = len(max(values, key=len))
+                    type_conv = type_conv.format(size_fld if size_fld > 0 else 1)
+
+                t = fits.BinTableHDU.from_columns([fits.Column(name='TIMESTAMP',
+                                                               array=np.array(time_stamps),
+                                                               format='K'),
+                                                   fits.Column(name=var_name,
+                                                               array=np.array(values),
+                                                               format=type_conv)])
+                hdul.append(t)
+
+            # Remove FITS file if exists, and (re)create it
+            self.from_pid, self.to_pid = (_pid, _pid)
+            self.from_pid_blk, self.to_pid_blk = (_pid, _pid)
+            self.name = _name
+            file_name = '{}/{}.fits'.format(self.outdir, self.generate_filename(self.file_tpl))
+            self.save_to_fits(hdul, file_name)
+            gen_files.append(file_name)
+            logging.info('Saved file {}'.format(file_name))
+
+            end_time = time.time()
+
+            retr_time_total = retr_time_total + (retr_time - start_time)
+            conv_time_total = conv_time_total + (end_time - retr_time)
+
+        full_time_total = end_time - start_time
+
+        logging.info("Data retrieval:   {:10.3f} s".format(retr_time_total))
+        logging.info("Data conversion:  {:10.3f} s".format(conv_time_total))
+        logging.info("Total exec. time: {:10.3f} s".format(full_time_total))
+        if len(param_names_invalid) > 0:
+            logging.info("The following parameters could not be converted:")
+            for p in param_names_invalid.keys():
+                logging.info('{}: "{}"'.format(p, param_names_invalid[p]))
+
+        return (retr_time_total, conv_time_total, full_time_total, param_names_invalid, gen_files)
 
     def create_actual_file_tpl(self, tpl):
         '''
@@ -386,25 +506,26 @@ class Retriever(object):
         can be used with str.format()
         '''
         template_placeholders = {
-                                 '%F': '{from_pid}', # Starting pid of the retrieval
+                                 '%F': '{from_pid}',     # Starting pid of the retrieval
                                  '%f': '{from_pid_blk}', # Starting pid of the file
                                  '%t': '{to_pid_blk}',   # End pid of the file
-                                 '%T': '{to_pid}', # End pid of the retrieval
-                                 '%b': '{pid_blk}',            # Block size
-                                 '%Y1': '{year1:04d}',         # Starting year
-                                 '%D1': '{doy1:02d}', # Starting day of year
-                                 '%M1': '{month1:02d}',       # Starting month
-                                 '%d1': '{day1:02d}',         # Starting day
-                                 '%h1': '{hour1:02d}',        # Starting hour
-                                 '%m1': '{min1:02d}', # Starting minute
-                                 '%s1': '{sec1:02d}', # Starting second
-                                 '%Y2': '{year2:04d}',        # End year
-                                 '%D2': '{doy2:02d}', # End day of year
-                                 '%M2': '{month2:02d}',        # End month
-                                 '%d2': '{day2:02d}',          # End day
-                                 '%h2': '{hour2:02d}',         # End hour
-                                 '%m2': '{min2:02d}',          # End minute
-                                 '%s2': '{sec2:02d}',          # End second
+                                 '%T': '{to_pid}',       # End pid of the retrieval
+                                 '%b': '{pid_blk}',      # Block size
+                                 '%N': '{name}',         # Param. name
+                                 '%Y1': '{year1:04d}',   # Starting year
+                                 '%D1': '{doy1:02d}',    # Starting day of year
+                                 '%M1': '{month1:02d}',  # Starting month
+                                 '%d1': '{day1:02d}',    # Starting day
+                                 '%h1': '{hour1:02d}',   # Starting hour
+                                 '%m1': '{min1:02d}',    # Starting minute
+                                 '%s1': '{sec1:02d}',    # Starting second
+                                 '%Y2': '{year2:04d}',   # End year
+                                 '%D2': '{doy2:02d}',    # End day of year
+                                 '%M2': '{month2:02d}',  # End month
+                                 '%d2': '{day2:02d}',    # End day
+                                 '%h2': '{hour2:02d}',   # End hour
+                                 '%m2': '{min2:02d}',    # End minute
+                                 '%s2': '{sec2:02d}',    # End second
                                  '%YMD1': '{year1:04d}{month1:02d}{day1:02d}', # Starting date in YYYYMMDD format
                                  '%YDoY1': '{year1:04d}{doy1:02d}', # Starting date in YYYYDoY format
                                  '%YMD2': '{year2:04d}{month2:02d}{day2:02d}', # End date in YYYYMMDD format
@@ -422,12 +543,13 @@ class Retriever(object):
         return tpl.format(from_pid=self.from_pid, from_pid_blk=self.from_pid_blk,
                           to_pid_blk=self.to_pid_blk, to_pid=self.to_pid,
                           pid_blk=self.pid_blk,
+                          name=self.name,
                           year1=self.year1, doy1=self.doy1,
                           month1=self.month1, day1=self.day1,
-                          hour1=self.hour1, min1=self.min1, sec1=self.sec1,
+                          hour1=self.hour1, min1=self.min1, sec1=int(self.sec1),
                           year2=self.year2, doy2=self.doy2,
                           month2=self.month2, day2=self.day2,
-                          hour2=self.hour2, min2=self.min2, sec2=self.sec2)
+                          hour2=self.hour2, min2=self.min2, sec2=int(self.sec2))
 
     def fits_build_hdr(self, i, j):
         '''

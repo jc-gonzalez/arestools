@@ -181,22 +181,25 @@ class App:
 
         lfrm11 = ttk.LabelFrame(tab0, text='Retrieval parameters')
 
-        parnames = StringVar(value=self.paramNames)
+        self.parNamesList = StringVar(value=self.paramNames)
 
         self.paramRqstMode = StringVar()
 
-        rbtnPar0 = ttk.Radiobutton(lfrm11, text='Select parameter names', command=self.selectParamNames,
+        rbtnPar0 = ttk.Radiobutton(lfrm11, text='Select parameter names',
+                                   command=self.selectParamNames,
                                    variable=self.paramRqstMode, value='name')
         rbtnPar0.grid(row=0, column=0, padx=10, pady=6)
 
-        rbtnPar1 = ttk.Radiobutton(lfrm11, text='Select range of Param.IDs.', command=self.selectParamIds,
-                                   variable=self.paramRqstMode, value='id')
+        rbtnPar1 = ttk.Radiobutton(lfrm11, text='Select range of Param.IDs.',
+                                   command=self.selectParamIds,
+                                   variable=self.paramRqstMode, value='pid')
         rbtnPar1.grid(row=0, column=1, padx=10, pady=6)
 
         frm111 = ttk.Frame(lfrm11)
         frm112 = ttk.Frame(lfrm11)
 
-        self.lstParamNames = Listbox(frm111, listvariable=parnames, height=10, selectmode='extended')
+        self.lstParamNames = Listbox(frm111, listvariable=self.parNamesList,
+                                     height=10, selectmode='extended')
         self.lstParamNames.pack(side=LEFT, fill=BOTH, expand=Y)
 
         scrollParName = ttk.Scrollbar(frm111, orient="vertical")
@@ -643,8 +646,8 @@ class App:
         '''
         # Get information
         print(json.dumps(self.getRetrievalParams()))
-        self.retrOut.delete('1.0', END)
-        self.retrOut.pack(expand=Y, fill=BOTH)
+        #self.retrOut.delete('1.0', END)
+        #self.retrOut.pack(expand=Y, fill=BOTH)
         #for path in run('find . -name "*.so" -ls'):
         #    print(path)
         #    self.retrOut.insert(END, path)
@@ -655,12 +658,18 @@ class App:
         tm_end = (list(retrParams['to_date_time'][retrParams['to_date_time']['mode']]) +
                   list(retrParams['to_date_time']['time']))
         pid1, pid2, pidblk = (retrParams['from_pid'], retrParams['to_pid'], retrParams['pids_step'])
+        rqstm = retrParams['mode']
+        rqstnames = retrParams['selected_names']
+
+        filename_tpl = 'ares_%F-%T_%f-%t_%YMD1T%hms1-%YMD2T%hms2'
+        if rqstm == 'name':
+            filename_tpl = 'ares_%F_%N_%YMD1T%hms1-%YMD2T%hms2'
 
         retriever = Retriever(cfg_file=self.cfgData['pyares_config'],
-                              rqst_mode='pid',
+                              rqst_mode=rqstm, names=rqstnames,
                               from_pid=pid1, to_pid=pid2, pids_block=pidblk,
                               from_date=tm_start, to_date=tm_end,
-                              output_dir='./')
+                              output_dir='./', file_tpl=filename_tpl)
 
         retr_time_total, conv_time_total, full_time_total, param_names_invalid, gen_files = retriever.run()
 
@@ -685,6 +694,9 @@ class App:
         Get JSON object with the current retrieval configuration parameters
         '''
         return {
+            'mode': self.paramRqstMode.get(),
+            'selected_names': [self.lstParamNames.get(idx)
+                               for idx in self.lstParamNames.curselection()],
             'from_pid': int(self.spbxFromPid.get()),
             'to_pid': int(self.spbxToPid.get()),
             'pids_step': int(self.spbxPidsBlock.get()),
