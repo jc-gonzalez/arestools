@@ -189,6 +189,7 @@ class Retriever(object):
             self.pid_blk = pids_block
             self.from_pid_blk = self.from_pid
             self.to_pid_blk = self.from_pid_blk + self.pid_blk - 1
+            self.name = ''
         else:
             self.from_pid, self.to_pid = (1, 1)
             self.from_pid_blk, self.to_pid_blk, self.pid_blk = (1, 1, 1)
@@ -394,68 +395,71 @@ class Retriever(object):
         # Set retrieval time stamp
         retr_time = time.time()
 
-        for _name, _pid in zip(self.param_names, param_pids):
+        # Convert sample columns to binary tables
+        i = 0
+        for column in samples:
+
+            pname = self.param_names[i]
+            pid = param_pids[i]
 
             # Currently only FITS files are generated
 
             # Build initial primary HDU for FITS file
-            hdul = self.fits_build_hdr(_pid, _pid)
+            hdul = self.fits_build_hdr(pid, pid)
 
-            # Convert sample columns to binary tables
+            # Loop on samples to add values to the resulting vectors
+            time_stamps = []
+            values = []
+            start = True
 
-            for column in samples:
-
-                # Loop on samples to add values to the resulting vectors
-                time_stamps = []
-                values = []
-                start = True
-
-                for s in column:
-                    if start:
-                        var_name = s.get_name()
-                        var_type = s.get_type()
-                        if var_name != _name:
-                            logging.warning("ERROR: Param. name does not match with expectation!")
-                        logging.info('Generating table for PID {} - {} (type={})'
-                                     .format(_pid, var_name, var_type))
-                        start = False
-
-                    time_stamps.append(s.get_time())
-
-                    value = s.get_value()
-                    if var_type == DateTimeType:
-                        value = unix_ms_to_datestr(value)
-
-                    values.append(value)
-
-                    if var_type == DateTimeType:
-                        var_type = StringType
-
+            for s in column:
                 if start:
-                    param_names_invalid[str(_pid - 1)] = _name
-                    continue
+                    var_name = s.get_name()
+                    var_type = s.get_type()
+                    if var_name != pname:
+                        logging.warning("ERROR: Param. name does not match with expectation!")
+                    logging.info('Generating table for PID {} - {} (type={})'
+                                 .format(pid, var_name, var_type))
+                    start = False
 
-                type_conv = Ares2FitsConversion[str(var_type)]
-                if var_type == StringType:
-                    size_fld = len(max(values, key=len))
-                    type_conv = type_conv.format(size_fld if size_fld > 0 else 1)
+                time_stamps.append(s.get_time())
 
-                t = fits.BinTableHDU.from_columns([fits.Column(name='TIMESTAMP',
-                                                               array=np.array(time_stamps),
-                                                               format='K'),
-                                                   fits.Column(name=var_name,
-                                                               array=np.array(values),
-                                                               format=type_conv)])
-                hdul.append(t)
+                value = s.get_value()
+                if var_type == DateTimeType:
+                    value = unix_ms_to_datestr(value)
+
+                values.append(value)
+
+                if var_type == DateTimeType:
+                    var_type = StringType
+
+            if start:
+                param_names_invalid[str(pid - 1)] = pname
+                continue
+
+            type_conv = Ares2FitsConversion[str(var_type)]
+            if var_type == StringType:
+                size_fld = len(max(values, key=len))
+                type_conv = type_conv.format(size_fld if size_fld > 0 else 1)
+
+            t = fits.BinTableHDU.from_columns([fits.Column(name='TIMESTAMP',
+                                                           array=np.array(time_stamps),
+                                                           format='K'),
+                                               fits.Column(name=var_name,
+                                                           array=np.array(values),
+                                                           format=type_conv)])
+            hdul.append(t)
 
             # Remove FITS file if exists, and (re)create it
-            self.from_pid, self.to_pid = (_pid, _pid)
-            self.from_pid_blk, self.to_pid_blk = (_pid, _pid)
-            self.name = _name
+            self.from_pid, self.to_pid = (pid, pid)
+            self.from_pid_blk, self.to_pid_blk = (pid, pid)
+            self.name = pname
             file_name = '{}/{}.fits'.format(self.outdir, self.generate_filename(self.file_tpl))
             self.save_to_fits(hdul, file_name)
             gen_files.append(file_name)
             logging.info('Saved file {}'.format(file_name))
+
+            i = i + 1
 
             end_time = time.time()
 
