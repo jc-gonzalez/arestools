@@ -236,6 +236,8 @@ class App:
         self.fromDateTime = DateTime(lfrm12)
         self.fromDateTime.grid(row=0, column=1, padx=2, pady=10)
 
+        ttk.Button(lfrm12, text='=', command=self.equalFromTo, width=1).grid(row=0, column=2, padx=10, sticky=E)
+
         ttk.Label(lfrm12, text='To timestamp:').grid(row=1, column=0, padx=2, pady=2, sticky=N+W)
         self.toDateTime = DateTime(lfrm12)
         self.toDateTime.grid(row=1, column=1, padx=2, pady=10)
@@ -661,6 +663,12 @@ class App:
         rqstm = retrParams['mode']
         rqstnames = retrParams['selected_names']
 
+        if rqstm == 'name' and len(rqstnames) < 1:
+            logging.error('No parameters are selected!')
+            return
+        if rqstm == 'pid' and pid1 > pid2:
+            logging.error('<From-PID> must be less or equal to <To-PID>')
+
         filename_tpl = 'ares_%F-%T_%f-%t_%YMD1T%hms1-%YMD2T%hms2'
         if rqstm == 'name':
             filename_tpl = 'ares_%F_%N_%YMD1T%hms1-%YMD2T%hms2'
@@ -703,6 +711,16 @@ class App:
             'from_date_time': self.fromDateTime.get(),
             'to_date_time': self.toDateTime.get()
         }
+
+    def equalFromTo(self):
+        '''
+        Set TO date equal to FROM date
+        '''
+        self.toDateTime.set(components = self.fromDateTime.get())
+        if self.fromDateTime.mode() == 'ymd':
+            self.toDateTime.useYMD()
+        else:
+            self.toDateTime.useYDoY()
 
     def importData(self):
         '''

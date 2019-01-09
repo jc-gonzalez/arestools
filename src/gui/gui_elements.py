@@ -225,7 +225,15 @@ class DateTime(ttk.Frame):
         self.ydoy.enable()
 
     def set(self, ydoy=False, year=None, month=None, day=None, doy=None,
-            hour=None, min=None, sec=None, msec=None):
+            hour=None, min=None, sec=None, msec=None, components=None):
+        if components:
+            year, month, day = components['ymd']
+            yeardoy, doy = components['ydoy']
+            hour, min, sec, msec = components['time']
+            ydoy = components['mode'] == 'ydoy'
+            if ydoy:
+                year = yeardoy
+
         if ydoy:
             self.dateMode.set('ydoy')
             self.ydoy.set(year, doy)
@@ -244,6 +252,9 @@ class DateTime(ttk.Frame):
         self.ydoy.clear()
         self.ymd.clear()
         self.time.clear()
+
+    def mode(self):
+        return self.dateMode.get()
 
 
 class StatusBar(ttk.Frame):
